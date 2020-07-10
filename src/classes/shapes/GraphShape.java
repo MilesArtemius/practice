@@ -6,11 +6,10 @@ import classes.dial.NodeNameDialog;
 import classes.graph.Ark;
 import classes.graph.Graph;
 import classes.graph.Node;
+import classes.graph.NodePlus;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
@@ -26,7 +25,7 @@ public class GraphShape extends JPanel {
     private Point2D movingMousePos;
     private Point2D transform;
 
-    private Node movingNode;
+    private NodePlus movingNode;
 
     public GraphShape() {
         graph = new Graph();
@@ -35,19 +34,20 @@ public class GraphShape extends JPanel {
 
         transform = new Point2D.Double(0, 0);
 
-        MouseAdapter adapter = new MouseAdapter() { // Fix cursor issues!!
+        MouseAdapter adapter = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                 Point2D absolute = e.getPoint();
                 e.translatePoint((int) -transform.getX(), (int) -transform.getY());
 
-                Log.cui().say("Mouse pressed at (", e.getX(), ", ", e.getY(), ")");
+                Log.cui().say("Нажатие кнопки мыши по точке (", e.getX(), ", ", e.getY(), ").");
                 for (NodeShape node: nodes) if (node.contains(e.getPoint()) && node.pressMouse(GraphShape.this, e, absolute)) return;
                 for (ArkShape ark: arks) if (ark.contains(e.getPoint()) && ark.pressMouse(GraphShape.this, e, absolute)) return;
                 if (SwingUtilities.isRightMouseButton(e)) {
                     MenuPopUp popUp = new MenuPopUp(new Point2D.Double(e.getX(), e.getY()));
                     popUp.show(e.getComponent(), (int) absolute.getX(), (int) absolute.getY());
                 } else {
+                    Log.cui().say("Изменена позиция экрана.");
                     setCursor(new Cursor(Cursor.MOVE_CURSOR));
                     movingMousePos = absolute;
                 }
@@ -58,10 +58,11 @@ public class GraphShape extends JPanel {
                 Point2D absolute = e.getPoint();
                 e.translatePoint((int) -transform.getX(), (int) -transform.getY());
 
-                Log.cui().say("Mouse released at (", e.getX(), ", ", e.getY(), ")");
+                Log.cui().say("Освобождение кнопки мыши в точке (", e.getX(), ", ", e.getY(), ").");
                 for (NodeShape node: nodes) if (node.contains(e.getPoint()) && node.releaseMouse(GraphShape.this, e, absolute)) return;
                 for (ArkShape ark: arks) if (ark.contains(e.getPoint()) && ark.releaseMouse(GraphShape.this, e, absolute)) return;
                 if (SwingUtilities.isLeftMouseButton(e)) {
+                    Log.cui().say("Сохранена позиция экрана.");
                     setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
                     movingMousePos = null;
                 }
@@ -99,17 +100,17 @@ public class GraphShape extends JPanel {
 
 
 
-    public void registerMoving(Node node, MouseEvent e) {
+    public void registerMoving(NodePlus node, MouseEvent e) {
         if (movingNode == null) {
-            Log.cui().say("Node '", node, "' moving from (", e.getX(), ", ", e.getY(), ")");
+            Log.cui().say("Узел '", node, "' двигается из точки (", e.getX(), ", ", e.getY(), ").");
             movingNode = node;
             setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
     }
 
-    public void unRegisterMoving(Node node, MouseEvent e) {
+    public void unRegisterMoving(NodePlus node, MouseEvent e) {
         if (movingNode == node) {
-            Log.cui().say("Node '", node, "' stopped at (", e.getX(), ", ", e.getY(), ")");
+            Log.cui().say("Узел '", node, "' остановился в точке (", e.getX(), ", ", e.getY(), ").");
             movingNode = null;
             setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         }
@@ -127,14 +128,21 @@ public class GraphShape extends JPanel {
         arks.clear();
 
         Graphics2D g2d = (Graphics2D) graphics;
+        if (Settings.getBoolean("graph_shape_aliasing")) {
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        }
+
         g2d.translate((int) transform.getX(), (int) transform.getY());
 
         setBackground(Settings.getColor("graph_shape_background_color"));
 
         for (Ark ark: graph.getArks()) arks.push(new ArkShape(ark, this, g2d));
-        for (Node node: graph.getNodes()) nodes.push(new NodeShape(node, this, g2d));
+        for (Node node: graph.getNodes()) nodes.push(new NodeShape((NodePlus) node, this, g2d));
 
-        if (graph.getNodes().isEmpty()) drawCenteredString(g2d, Settings.getString("no_nodes_prompt"), -transform.getX(), -transform.getY(), getWidth(), getHeight());
+        if (graph.getNodes().isEmpty()) drawCenteredString(g2d, Settings.getString("no_nodes_prompt"),
+                -transform.getX() + getWidth() * 1.0/10.0, -transform.getY() + getHeight() * 1.0/10.0, getWidth() * 4.0/5.0, getHeight() * 4.0/5.0);
     }
 
     public int getSizeModifier() {
@@ -164,29 +172,24 @@ public class GraphShape extends JPanel {
 
     private class MenuPopUp extends JPopupMenu {
         public MenuPopUp(Point2D position) {
+            Log.cui().say("Вызвано меню GraphShape.");
             JMenuItem item = new JMenuItem(Settings.getString("create_node_action"));
-            item.addActionListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    NodeNameDialog dialog = new NodeNameDialog(SwingUtilities.getWindowAncestor(GraphShape.this),
-                            Settings.getString("create_node_dialog_name"), false);
-                    dialog.setListener(new ActionListener() {
-                        @Override
-                        public void actionPerformed(ActionEvent e) {
-                            String nodeName = Settings.getString("create_node_dialog_default_node_name",
-                                    (new Random()).nextInt() % Settings.getLong("graph_shape_random_node_name_length"));
-                            if (!dialog.getResult().equals("")) nodeName = dialog.getResult();
-                            dialog.dispose();
+            item.addActionListener(e -> {
+                Log.cui().say("Вызбран элемент '" + item.getText()  + "'.");
+                NodeNameDialog dialog = new NodeNameDialog(SwingUtilities.getWindowAncestor(GraphShape.this),
+                        Settings.getString("create_node_dialog_name"), false);
+                dialog.setListener(value -> {
+                    String nodeName = Settings.getString("create_node_dialog_default_node_name",
+                            (new Random()).nextInt() % Settings.getLong("graph_shape_random_node_name_length"));
+                    if (!value.equals("")) nodeName = value;
+                    dialog.dispose();
 
-                            Log.cui().say("Created new node: '", nodeName, "'");
-                            GraphShape.this.getGraph().addNode(position, nodeName);
-                            GraphShape.this.repaint();
-                        }
-                    });
-                    dialog.pack();
-                    dialog.setLocationRelativeTo(GraphShape.this);
-                    dialog.setVisible(true);
-                }
+                    GraphShape.this.getGraph().addNode(new NodePlus(position, nodeName));
+                    GraphShape.this.repaint();
+                });
+                dialog.pack();
+                dialog.setLocationRelativeTo(GraphShape.this);
+                dialog.setVisible(true);
             });
             add(item);
         }

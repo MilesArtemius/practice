@@ -1,16 +1,24 @@
 package classes.graph;
 
-import java.awt.geom.Point2D;
-import java.io.Serializable;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
-public class Node implements Serializable {
+public class Node {
 
     private static final long serialVersionUID = 3L;
-    private Point2D position;
     private String name;
     private LinkedList<Ark> arks = new LinkedList<Ark>();
     private boolean hidden;
+
+    private Node() {}
+
+    public Node(Node node) {
+        this.name = node.getName();
+        this.arks = node.arks;
+        this.hidden = node.hidden;
+    }
 
     public String getName() {
         return name;
@@ -25,7 +33,7 @@ public class Node implements Serializable {
         if (!arks.isEmpty()){
 
             for (Ark ark:arks) {
-                if (ark.getStart() == node || ark.getEnd() == node){//неважно на каком конце нода которую ищем
+                if (ark.getStart().equals(node.getName()) || ark.getEnd().equals(node.getName())){//неважно на каком конце нода которую ищем
 
                     return ark;
                 }
@@ -40,8 +48,7 @@ public class Node implements Serializable {
         this.name = name;
     }
 
-    public Node(Point2D position, String name) {
-        this.position = position;
+    public Node(String name) {
         this.name = name;
         this.hidden = true;
     }
@@ -61,17 +68,28 @@ public class Node implements Serializable {
         return hidden;
     }
 
-    public Point2D getPosition() {
-        return position;
-    }
-
-    public void setPosition(Point2D position) {
-        this.position = position;
-    }
-
     @Override
     public String toString(){
 
         return "Узел "+ name;
+    }
+    public String toSimpleString(){
+        return "Узел "+ name;
+    }
+
+    public Map<String, Object> writeToMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("NAME", name);
+        map.put("HIDDEN", hidden);
+        return map;
+    }
+
+    public static Node readFromMap(Map<String, Object> map, List<Ark> arks) {
+        Node node = new Node();
+        node.name = (String) map.get("NAME");
+        node.arks = new LinkedList<>();
+        node.hidden = (boolean) map.get("HIDDEN");
+        for (Ark ark: arks) if (ark.getStart().equals(node.name) || ark.getEnd().equals(node.name)) node.arks.push(ark);
+        return node;
     }
 }

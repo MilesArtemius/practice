@@ -2,12 +2,12 @@ package classes.shapes;
 
 import classes.Log;
 import classes.Settings;
+import classes.dial.ArkWeightDialog;
 import classes.graph.Ark;
+import classes.graph.NodePlus;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
 
@@ -18,9 +18,12 @@ public class ArkShape extends Polygon {
         this.npoints = 4;
         this.ark = ark;
 
+        NodePlus start = (NodePlus) parent.getGraph().getNode(ark.getStart());
+        NodePlus end = (NodePlus) parent.getGraph().getNode(ark.getEnd());
+
         double size = Settings.getLong("ark_shape_gap") * parent.getSizeModifier();
 
-        Point2D posStart = ark.getStart().getPosition(), posEnd = ark.getEnd().getPosition(), perFirst, perSecond,
+        Point2D posStart = start.getPosition(), posEnd = end.getPosition(), perFirst, perSecond,
                 center = new Point2D.Double(posStart.getX() + (posEnd.getX() - posStart.getX()) / 2, posStart.getY() + (posEnd.getY() - posStart.getY()) / 2);
 
         if ((posStart.getX() != posEnd.getX()) && (posStart.getY() != posEnd.getY())) {
@@ -38,12 +41,12 @@ public class ArkShape extends Polygon {
             perSecond = new Point2D.Double(center.getX(), center.getY() - size);
         }
 
-        xpoints[0] = (int) ark.getStart().getPosition().getX();
-        ypoints[0] = (int) ark.getStart().getPosition().getY();
+        xpoints[0] = (int) start.getPosition().getX();
+        ypoints[0] = (int) start.getPosition().getY();
         xpoints[1] = (int) perFirst.getX();
         ypoints[1] = (int) perFirst.getY();
-        xpoints[2] = (int) ark.getEnd().getPosition().getX();
-        ypoints[2] = (int) ark.getEnd().getPosition().getY();
+        xpoints[2] = (int) end.getPosition().getX();
+        ypoints[2] = (int) end.getPosition().getY();
         xpoints[3] = (int) perSecond.getX();
         ypoints[3] = (int) perSecond.getY();
         invalidate();
@@ -82,7 +85,7 @@ public class ArkShape extends Polygon {
 
 
     public boolean pressMouse(GraphShape parent, MouseEvent e, Point2D absolute) {
-        Log.cui().say("Mouse pressed on ark '", ark.getStart(), "' - > '", ark.getEnd(), "'");
+        Log.cui().say("Нажатие кнопки мыши по ребру '", ark, "'.");
         if (SwingUtilities.isRightMouseButton(e)) {
             MenuPopUp popUp = new MenuPopUp(parent);
             popUp.show(e.getComponent(), (int) absolute.getX(), (int) absolute.getY());
@@ -91,7 +94,7 @@ public class ArkShape extends Polygon {
     }
 
     public boolean releaseMouse(GraphShape parent, MouseEvent e, Point2D absolute) {
-        Log.cui().say("Mouse released from '", ark.getStart(), "' - > '", ark.getEnd(), "'");
+        Log.cui().say("Освобождение кнопки мыши в ребре '", ark, "'.");
         return true;
     }
 
@@ -99,15 +102,29 @@ public class ArkShape extends Polygon {
 
     private class MenuPopUp extends JPopupMenu {
         public MenuPopUp(GraphShape parent) {
-            JMenuItem item = new JMenuItem(Settings.getString("remove_ark_action"));
-            item.addActionListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    parent.getGraph().deleteArk(ArkShape.this.ark.getStart(), ArkShape.this.ark.getEnd());
-                    parent.repaint();
-                }
+            Log.cui().say("Вызвано меню ArkShape.");
+            JMenuItem remove = new JMenuItem(Settings.getString("remove_ark_action"));
+            remove.addActionListener(e -> {
+                Log.cui().say("Вызбран элемент '" + remove.getText()  + "'.");
+                parent.getGraph().deleteArk(parent.getGraph().getNode(ArkShape.this.ark.getStart()), parent.getGraph().getNode(ArkShape.this.ark.getEnd()));
+                parent.repaint();
             });
-            add(item);
+            add(remove);
+            JMenuItem reweight = new JMenuItem(Settings.getString("reweight_ark_action"));
+            reweight.addActionListener(e -> {
+                Log.cui().say("Вызбран элемент '" + reweight.getText()  + "'.");
+                ArkWeightDialog dialog = new ArkWeightDialog(SwingUtilities.getWindowAncestor(parent), Settings.getString("reweight_ark_dialog_name"));
+                dialog.setListener(value -> {
+                    dialog.dispose();
+                    ArkShape.this.ark.setWeight(value);
+                    parent.getGraph().setRecentlyChanged(true);
+                    parent.repaint();
+                });
+                dialog.pack();
+                dialog.setLocationRelativeTo(parent);
+                dialog.setVisible(true);
+            });
+            add(reweight);
         }
     }
 }

@@ -1,7 +1,6 @@
 package classes;
 
-import classes.io.Filer;
-
+import javax.swing.*;
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -18,6 +17,7 @@ public class Log {
     private String file;
     private boolean isGUILog;
     private LinkedList<String> attr;
+    private String color;
 
     public enum Attributes {
         BOLD("b"), ITALIC("i"), MARKED("mark"), CODE("code");
@@ -31,6 +31,22 @@ public class Log {
         }
     }
 
+    public enum Colors {
+        NO(""), BLUE("blue"), GREEN("green"), RED("red"), YELLOW("cc7000");
+        private String color;
+
+        Colors(String col) {
+            this.color = col;
+        }
+        public String getColor() {
+            return color;
+        }
+    }
+
+    public enum Level {
+        NO_LOG, CONSOLE, FILE, GUI
+    }
+
     private Log(boolean isGUISet) {
         Date current = Calendar.getInstance().getTime();
         this.pref = (new SimpleDateFormat("dd-MM-yyyy HH:mm:ss")).format(current) + ": ";
@@ -42,7 +58,7 @@ public class Log {
         this.file = (new SimpleDateFormat("dd-MM-yyyy")).format(current) + "_uptime.log";
         this.isGUILog = isGUISet;
         this.attr = new LinkedList<>();
-
+        this.color = "";
     }
 
     public static Log cui() {
@@ -51,6 +67,39 @@ public class Log {
 
     public static Log gui(Attributes... attributes) {
         return (new Log(true)).attr(attributes);
+    }
+
+    public static Log getForLevel(Level level) {
+        switch (level) {
+            case NO_LOG: return cui().out(null).file(null);
+            case CONSOLE: return cui().file(null);
+            case FILE: return cui();
+            case GUI: return gui();
+            default: return gui(Attributes.ITALIC);
+        }
+    }
+
+    public static void consumeException(String comment, Exception e) {
+        gui(Attributes.BOLD).col(Colors.RED).say(comment);
+        cui().beg("<--- !!! --->\n").say(e.getMessage());
+    }
+
+
+
+    public Log good() {
+        return attr(Log.Attributes.BOLD).col(Log.Colors.GREEN);
+    }
+
+    public Log info() {
+        return attr(Log.Attributes.BOLD).col(Log.Colors.BLUE);
+    }
+
+    public Log warn() {
+        return attr(Log.Attributes.BOLD).col(Log.Colors.YELLOW);
+    }
+
+    public Log bad() {
+        return attr(Log.Attributes.BOLD).col(Log.Colors.RED);
     }
 
 
@@ -90,8 +139,18 @@ public class Log {
         return this;
     }
 
+    public Log gui(boolean enable) {
+        this.isGUILog = enable;
+        return this;
+    }
+
     public Log attr(Attributes... attributes) {
         for (Attributes attribute: attributes) attr.addLast(attribute.getAttribute());
+        return this;
+    }
+
+    public Log col(Colors color) {
+        this.color = color.getColor();
         return this;
     }
 
@@ -103,16 +162,15 @@ public class Log {
         argument.append(words[words.length - 1]).append(end).append(suf);
 
         attr.addFirst("p");
-
         String result = argument.toString();
-        if (out != null) out.println(result);
-        if (file != null) Filer.printToFile(result, file, new Filer.OnPerformed() {
-            @Override
-            public void onFinished(Exception reason) {
-                if (reason != null) reason.printStackTrace();
-            }
-        });
 
-        if (isGUILog && (Prima.getVisual() != null)) Prima.getVisual().appendTextToLog(result, attr);
+        SwingUtilities.invokeLater(() -> {
+            if (out != null) out.println(result);
+            if (file != null) Filer.printToFile(result, file, reason -> {
+                if (reason != null) reason.printStackTrace();
+            });
+
+            if (isGUILog && (Prima.getVisual() != null)) Prima.getVisual().appendTextToLog(result, color, attr);
+        });
     }
 }
